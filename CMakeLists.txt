@@ -9,9 +9,11 @@ include(CheckLibraryExists)
 include(CheckIncludeFile)
 include(CheckCCompilerFlag)
 include(CheckSymbolExists)
+include(CheckCSourceRuns)
 include(CheckCXXSourceRuns)
 include(TestBigEndian)
 include(CheckFunctionExists)
+include(CheckBuiltInFunctionExists)
 
 find_program(ECHO echo)
 find_program(XSLTPROC xsltproc)
@@ -54,6 +56,7 @@ include(cmake/utils.cmake)
 include(cmake/arch.cmake)
 include(cmake/os.cmake)
 include(cmake/compiler.cmake)
+include(cmake/simd.cmake)
 include(cmake/profile.cmake)
 
 check_symbol_exists(MAP_ANON sys/mman.h HAVE_MAP_ANON)
@@ -72,6 +75,27 @@ check_function_exists(memrchr HAVE_MEMRCHR)
 # which we use to determine the end (or beginning, actually) of
 # stack. Find whether or not it's present.
 check_library_exists("" __libc_stack_end "" HAVE_LIBC_STACK_END)
+
+set(HAVE_NON_C99_PTHREAD_H 0)
+if (CMAKE_COMPILER_IS_GNUCC)
+
+    set(CMAKE_REQUIRED_FLAGS "-std=gnu99 -Wall -fexceptions -pthread")
+    check_symbol_exists(__pthread_cleanup_routine pthread.h test1)
+
+    set(HAVE_NON_C99_PTHREAD_H OFF)
+    if (test1)
+        try_compile(HAVE_NON_C99_PTHREAD_H ${CMAKE_BINARY_DIR} 
+            ${CMAKE_SOURCE_DIR}/cmake/pthread-broken-inline-test.c
+            COMPILE_DEFINITIONS "-std=gnu99 -Wall -fexceptions")
+    endif()
+    unset(test1)
+
+    if (HAVE_NON_C99_PTHREAD_H)
+        message(WARNING "The system pthread.h is not compatible with the C99 mode."
+            "A special workaround will be used during compilation."
+            "If it does not work for you, please update system glibc.")
+    endif()
+endif()
 
 #
 # Enable 'make TAGS' target.
@@ -285,7 +309,7 @@ add_subdirectory(client)
 add_subdirectory(test)
 add_subdirectory(doc)
 
-install (FILES README LICENSE doc/box-protocol.txt
+install (FILES README.md LICENSE doc/box-protocol.txt
          DESTINATION share/doc/tarantool)
 
 include (cmake/cpack.cmake)
@@ -324,13 +348,15 @@ message (STATUS "VERSION: ${PACKAGE_VERSION}")
 message (STATUS "BUILD: ${TARANTOOL_BUILD}")
 message (STATUS "C_COMPILER: ${TARANTOOL_C_COMPILER}")
 message (STATUS "CXX_COMPILER: ${TARANTOOL_CXX_COMPILER}")
-message (STATUS "C_FLAGS:${CMAKE_C_FLAGS} ${TARANTOOL_C_FLAGS}")
-message (STATUS "CXX_FLAGS:${CMAKE_CXX_FLAGS} ${TARANTOOL_CXX_FLAGS}")
-message (STATUS "OBJC_FLAGS:${CMAKE_C_FLAGS} ${CMAKE_OBJC_FLAGS}")
-message (STATUS "OBJCXX_FLAGS:${CMAKE_CXX_FLAGS} ${CMAKE_OBJCXX_FLAGS}")
+message (STATUS "C_FLAGS:${TARANTOOL_C_FLAGS}")
+message (STATUS "CXX_FLAGS:${TARANTOOL_CXX_FLAGS}")
+message (STATUS "OBJC_FLAGS:${TARANTOOL_OBJC_FLAGS}")
+message (STATUS "OBJCXX_FLAGS:${TARANTOOL_OBJCXX_FLAGS}")
 message (STATUS "PREFIX: ${CMAKE_INSTALL_PREFIX}")
 message (STATUS "MODULES: ${TARANTOOL_MODULES}")
 message (STATUS "ENABLE_STATIC: ${ENABLE_STATIC}")
+message (STATUS "ENABLE_SSE2: ${ENABLE_SSE2}")
+message (STATUS "ENABLE_AVX: ${ENABLE_AVX}")
 message (STATUS "ENABLE_GCOV: ${ENABLE_GCOV}")
 message (STATUS "ENABLE_GPROF: ${ENABLE_GPROF}")
 message (STATUS "ENABLE_TRACE: ${ENABLE_TRACE}")

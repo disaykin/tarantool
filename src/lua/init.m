@@ -45,6 +45,7 @@
 #include "pickle.h"
 #include "fiber.h"
 #include "lua_ipc.h"
+#include "lua_socket.h"
 #include "lua/info.h"
 #include "lua/slab.h"
 #include "lua/stat.h"
@@ -888,7 +889,7 @@ lbox_fiber_create(struct lua_State *L)
 		luaL_error(L, "fiber.create(function): recursion limit"
 			   " reached");
 
-	struct fiber *f = fiber_create("lua", box_lua_fiber_run);
+	struct fiber *f = fiber_new("lua", box_lua_fiber_run);
 	/* Preserve the session in a child fiber. */
 	fiber_set_sid(f, fiber->sid);
 	/* Initially the fiber is cancellable */
@@ -1248,7 +1249,7 @@ lbox_print(struct lua_State *L)
 			tbuf_printf(out, CRLF);
 	} else {
 		/* Add a message to the server log */
-		out = tbuf_alloc(fiber->gc_pool);
+		out = tbuf_new(fiber->gc_pool);
 		tarantool_lua_printstack(L, out);
 		say_info("%s", tbuf_str(out));
 	}
@@ -1333,6 +1334,23 @@ tarantool_lua_register_type(struct lua_State *L, const char *type_name,
 	lua_pop(L, 1);
 }
 
+static const struct luaL_reg errorlib [] = {
+	{NULL, NULL}
+};
+
+static void
+tarantool_lua_error_init(struct lua_State *L) {
+	luaL_register(L, "box.error", errorlib);
+	for (int i = 0; i < tnt_error_codes_enum_MAX; i++) {
+		const char *name = tnt_error_codes[i].errstr;
+		if (strstr(name, "UNUSED") || strstr(name, "RESERVED"))
+			continue;
+		lua_pushnumber(L, tnt_errcode_val(i));
+		lua_setfield(L, -2, name);
+	}
+	lua_pop(L, 1);
+}
+
 struct lua_State *
 tarantool_lua_init()
 {
@@ -1367,7 +1385,9 @@ tarantool_lua_init()
 	tarantool_lua_stat_init(L);
 	tarantool_lua_ipc_init(L);
 	tarantool_lua_uuid_init(L);
+	tarantool_lua_socket_init(L);
 	tarantool_lua_session_init(L);
+	tarantool_lua_error_init(L);
 
 	mod_lua_init(L);
 
@@ -1392,7 +1412,7 @@ tarantool_lua_close(struct lua_State *L)
 static int
 tarantool_lua_dostring(struct lua_State *L, const char *str)
 {
-	struct tbuf *buf = tbuf_alloc(fiber->gc_pool);
+	struct tbuf *buf = tbuf_new(fiber->gc_pool);
 	tbuf_printf(buf, "%s%s", "return ", str);
 	int r = luaL_loadstring(L, tbuf_str(buf));
 	if (r) {
@@ -1587,13 +1607,11 @@ tarantool_lua_load_init_script(struct lua_State *L)
 	 * To work this problem around we must run init script in
 	 * a separate fiber.
 	 */
-	struct fiber *loader = fiber_create(TARANTOOL_LUA_INIT_SCRIPT,
+	struct fiber *loader = fiber_new(TARANTOOL_LUA_INIT_SCRIPT,
 					    load_init_script);
 	fiber_call(loader, L);
 	/* Outside the startup file require() or ffi are not
 	 * allowed.
 	*/
 	tarantool_lua_sandbox(tarantool_L);
-
 }
-

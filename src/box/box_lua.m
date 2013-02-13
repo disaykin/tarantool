@@ -79,6 +79,9 @@ static const char *tuplelib_name = "box.tuple";
 static void
 lbox_pushtuple(struct lua_State *L, struct tuple *tuple);
 
+static struct tuple *
+lua_totuple(struct lua_State *L, int index);
+
 static inline struct tuple *
 lua_checktuple(struct lua_State *L, int narg)
 {
@@ -98,6 +101,17 @@ lua_istuple(struct lua_State *L, int narg)
 		tuple = * (void **) lua_touserdata(L, narg);
 	lua_pop(L, 2);
 	return tuple;
+}
+
+static int
+lbox_tuple_new(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	if (argc < 1)
+		luaL_error(L, "tuple.new(): bad arguments");
+	struct tuple *tuple = lua_totuple(L, 1);
+	lbox_pushtuple(L, tuple);
+	return 1;
 }
 
 static int
@@ -431,7 +445,7 @@ lbox_tuple_tostring(struct lua_State *L)
 {
 	struct tuple *tuple = lua_checktuple(L, 1);
 	/* @todo: print the tuple */
-	struct tbuf *tbuf = tbuf_alloc(fiber->gc_pool);
+	struct tbuf *tbuf = tbuf_new(fiber->gc_pool);
 	tuple_print(tbuf, tuple->field_count, tuple->data);
 	lua_pushlstring(L, tbuf->data, tbuf->size);
 	return 1;
@@ -495,7 +509,7 @@ lbox_tuple_pairs(struct lua_State *L)
 	return 3;
 }
 
-static const struct luaL_reg lbox_tuple_meta [] = {
+static const struct luaL_reg lbox_tuple_meta[] = {
 	{"__gc", lbox_tuple_gc},
 	{"__len", lbox_tuple_len},
 	{"__index", lbox_tuple_index},
@@ -507,6 +521,11 @@ static const struct luaL_reg lbox_tuple_meta [] = {
 	{"find", lbox_tuple_find},
 	{"findall", lbox_tuple_findall},
 	{"unpack", lbox_tuple_unpack},
+	{NULL, NULL}
+};
+
+static const struct luaL_reg lbox_tuplelib[] = {
+	{"new", lbox_tuple_new},
 	{NULL, NULL}
 };
 
@@ -715,10 +734,8 @@ lbox_create_iterator(struct lua_State *L)
 		} else {
 			/* Single or multi- part key. */
 			field_count = argc - 2;
-			say_warn("Field_count: %u %u",
-				 field_count, index->key_def.part_count);
-			struct tbuf *data = tbuf_alloc(fiber->gc_pool);
-			for (u32 i = 0; i < field_count; i++) {
+			struct tbuf *data = tbuf_new(fiber->gc_pool);
+			for (int i = 0; i < field_count; i++) {
 				enum field_data_type type = UNKNOWN;
 				if (i < index->key_def.part_count) {
 					u32 field_no = index->key_def.parts[i];
@@ -820,7 +837,7 @@ lbox_index_count(struct lua_State *L)
 		luaL_error(L, "index.count(): one or more arguments expected");
 	/* preparing single or multi-part key */
 	void *key;
-	int key_part_count;
+	u32 key_part_count;
 	if (argc == 1 && lua_type(L, 2) == LUA_TUSERDATA) {
 		/* Searching by tuple. */
 		struct tuple *tuple = lua_checktuple(L, 2);
@@ -829,9 +846,8 @@ lbox_index_count(struct lua_State *L)
 	} else {
 		/* Single or multi- part key. */
 		key_part_count = argc;
-		struct tbuf *data = tbuf_alloc(fiber->gc_pool);
-		u32 part_count = argc;
-		for (u32 i = 0; i < part_count; ++i) {
+		struct tbuf *data = tbuf_new(fiber->gc_pool);
+		for (int i = 0; i < argc; ++i) {
 			enum field_data_type type = UNKNOWN;
 			if (i < index->key_def.part_count) {
 				u32 field_no = index->key_def.parts[i];
@@ -1020,8 +1036,8 @@ lua_table_to_tuple(struct lua_State *L, int index)
 	return tuple;
 }
 
-static void
-port_add_lua_ret(struct port *port, struct lua_State *L, int index)
+static struct tuple*
+lua_totuple(struct lua_State *L, int index)
 {
 	int type = lua_type(L, index);
 	struct tuple *tuple;
@@ -1081,6 +1097,13 @@ port_add_lua_ret(struct port *port, struct lua_State *L, int index)
 		tnt_raise(ClientError, :ER_PROC_RET, lua_typename(L, type));
 		break;
 	}
+	return tuple;
+}
+
+static void
+port_add_lua_ret(struct port *port, struct lua_State *L, int index)
+{
+	struct tuple *tuple = lua_totuple(L, index);
 	@try {
 		port_add_tuple(port, tuple, BOX_RETURN_TUPLE);
 	} @finally {
@@ -1153,8 +1176,22 @@ lbox_process(lua_State *L)
 	return lua_gettop(L) - top;
 }
 
+static int
+lbox_raise(lua_State *L)
+{
+	if (lua_gettop(L) != 2)
+		luaL_error(L, "box.raise(): bad arguments");
+	uint32_t code = lua_tointeger(L, 1);
+	if (!code)
+		luaL_error(L, "box.raise(): unknown error code");
+	const char *str = lua_tostring(L, 2);
+	tnt_raise(ClientError, :code :str);
+	return 0;
+}
+
 static const struct luaL_reg boxlib[] = {
 	{"process", lbox_process},
+	{"raise", lbox_raise},
 	{NULL, NULL}
 };
 
@@ -1250,6 +1287,8 @@ mod_lua_init(struct lua_State *L)
 {
 	/* box, box.tuple */
 	tarantool_lua_register_type(L, tuplelib_name, lbox_tuple_meta);
+	luaL_register(L, tuplelib_name, lbox_tuplelib);
+	lua_pop(L, 1);
 	luaL_register(L, "box", boxlib);
 	lua_pop(L, 1);
 	/* box.index */

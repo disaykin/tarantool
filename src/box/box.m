@@ -86,7 +86,6 @@ static void
 process_rw(struct port *port, u32 op, struct tbuf *data)
 {
 	struct txn *txn = txn_begin();
-	ev_tstamp start = ev_now(), stop;
 
 	@try {
 		struct request *request = request_create(op, data);
@@ -99,11 +98,6 @@ process_rw(struct port *port, u32 op, struct tbuf *data)
 	} @catch (id e) {
 		txn_rollback(txn);
 		@throw;
-	} @finally {
-		stop = ev_now();
-		if (stop - start > cfg.too_long_threshold)
-			say_warn("too long %s: %.3f sec",
-				 request_name(op), stop - start);
 	}
 }
 
@@ -220,7 +214,7 @@ static int
 snap_print(void *param __attribute__((unused)), struct tbuf *t)
 {
 	@try {
-		struct tbuf *out = tbuf_alloc(t->pool);
+		struct tbuf *out = tbuf_new(t->pool);
 		struct header_v11 *raw_row = header_v11(t);
 		struct tbuf *b = palloc(t->pool, sizeof(*b));
 		b->data = t->data + sizeof(struct header_v11);
@@ -244,7 +238,7 @@ static int
 xlog_print(void *param __attribute__((unused)), struct tbuf *t)
 {
 	@try {
-		struct tbuf *out = tbuf_alloc(t->pool);
+		struct tbuf *out = tbuf_new(t->pool);
 		box_xlog_sprint(out, t);
 		printf("%*s\n", (int)out->size, (char *)out->data);
 	} @catch (id e) {
@@ -315,13 +309,15 @@ box_enter_master_or_replica_mode(struct tarantool_cfg *conf)
 
 		snprintf(status, sizeof(status), "replica/%s%s",
 			 conf->replication_source, custom_proc_title);
-		title("replica/%s%s", conf->replication_source, custom_proc_title);
+		title("replica/%s%s", conf->replication_source,
+		      custom_proc_title);
 	} else {
 		box_process = process_rw;
 
 		memcached_start_expire();
 
-		snprintf(status, sizeof(status), "primary%s", custom_proc_title);
+		snprintf(status, sizeof(status), "primary%s",
+			 custom_proc_title);
 		title("primary%s", custom_proc_title);
 
 		say_info("I am primary");
@@ -472,8 +468,9 @@ box_init(void)
 	if (cfg.local_hot_standby) {
 		say_info("starting local hot standby");
 		recovery_follow_local(recovery_state, cfg.wal_dir_rescan_delay);
-		snprintf(status, sizeof(status), "hot_standby");
-		title("hot_standby");
+		snprintf(status, sizeof(status), "hot_standby%s",
+			 custom_proc_title);
+		title("hot_standby%s", custom_proc_title);
 	}
 }
 

@@ -266,7 +266,6 @@ find_tree_type(struct space *space, const struct key_def *key_def)
 	}
 
 	/* Check that there are no gaps after the first field */
-	u32 arity_min = space_arity_min(space);
 	u32 parts[key_def->part_count];
 	memcpy(parts, key_def->parts, sizeof(parts));
 	qsort(parts, key_def->part_count, sizeof(*parts), qsort_u32_cmp);
@@ -401,7 +400,6 @@ fold_with_key_parts(Index *self, struct key_data *key_data)
 static u32
 fold_with_dense_offset(Index *self, struct tuple *tuple)
 {
-	struct key_def *key_def = &self->key_def;
 	const u8 *tuple_data = tuple->data;
 
 	u32 arity_min = space_arity_min(self->space);
@@ -428,7 +426,6 @@ fold_with_dense_offset(Index *self, struct tuple *tuple)
 static u32
 fold_with_num32_value(Index *self, struct tuple *tuple)
 {
-	struct key_def *key_def = &self->key_def;
 	const u8 *tuple_data = tuple->data;
 
 	u32 arity_min = space_arity_min(self->space);
