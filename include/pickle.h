@@ -127,4 +127,7 @@ tuple_range_size(const void **begin, const void *end, size_t count)
 	return *begin - start;
 }
 
+void *
+save_field(void *buf, const void *data, u32 len);
+
 #endif /* TARANTOOL_PICKLE_H_INCLUDED */

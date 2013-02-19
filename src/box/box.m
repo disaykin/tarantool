@@ -258,8 +258,8 @@ recover_snap_row(struct tbuf *t)
 	memcpy(tuple->data, row->data, row->data_size);
 	tuple->field_count = row->tuple_size;
 
-	struct space *space = space_find(row->space);
-	Index *index = space_index(space, 0);
+	struct space *space = space_find_by_no(row->space);
+	Index *index = index_find_by_no(space, 0);
 	/* Check to see if the tuple has a sufficient number of fields. */
 	if (unlikely(tuple->field_count < space->max_fieldno)) {
 		tnt_raise(IllegalParams, :"tuple must have all indexed fields");
@@ -441,8 +441,6 @@ box_init(void)
 
 	/* initialization spaces */
 	space_init();
-	/* configure memcached space */
-	memcached_space_init();
 
 	/* recovery initialization */
 	recovery_init(cfg.snap_dir, cfg.wal_dir,
@@ -499,9 +497,13 @@ snapshot_write_tuple(struct log_io *l, struct fio_batch *batch,
 static void
 snapshot_space(struct space *sp, void *udata)
 {
+	/* Do not save temporary spaces into snaphost */
+	if (sp->flags & SPACE_FLAG_TEMPORARY)
+		return;
+
 	struct tuple *tuple;
 	struct { struct log_io *l; struct fio_batch *batch; } *ud = udata;
-	Index *pk = space_index(sp, 0);
+	Index *pk = index_find_by_no(sp, 0);
 	struct iterator *it = pk->position;
 	[pk initIterator: it :ITER_ALL :NULL :0];
 

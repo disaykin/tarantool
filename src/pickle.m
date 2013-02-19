@@ -174,3 +174,13 @@ varint32_sizeof(u32 value)
 		return 4;
 	return 5;
 }
+
+void *
+save_field(void *buf, const void *data, u32 len)
+{
+	buf = save_varint32(buf, len);
+	memcpy(buf, data, len);
+	buf += len;
+
+	return buf;
+}

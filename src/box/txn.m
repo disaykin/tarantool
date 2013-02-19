@@ -79,6 +79,10 @@ void
 txn_commit(struct txn *txn)
 {
 	if (txn->old_tuple || txn->new_tuple) {
+		/* Do not save temporary spaces into WAL */
+		if (txn->space->flags & SPACE_FLAG_TEMPORARY)
+			return;
+
 		int64_t lsn = next_lsn(recovery_state);
 
 		ev_tstamp start = ev_now(), stop;

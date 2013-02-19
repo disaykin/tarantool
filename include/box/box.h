@@ -97,7 +97,21 @@ box_leave_local_standby_mode(void *data __attribute__((unused)));
 enum {
 	BOX_SPACE_MAX = UINT32_MAX,
 	BOX_INDEX_MAX = 10,
-	BOX_FIELD_MAX = UINT32_MAX
+	BOX_FIELD_MAX = UINT32_MAX,
+
+	BOX_SYSSPACE_SPACE_NO = 4294967294,
+	BOX_SYSSPACE_INDEX_NO = 4294967293,
+
+	/*
+	 * Space and index name stored as varint32 + data (without zero
+	 * at the end). Since varint32_sizeof(n < 128) = 1, name can contain
+	 * at most 127 chars.
+	 */
+	BOX_SPACE_NAME_MAXLEN = 128,
+	BOX_INDEX_NAME_MAXLEN = 128
 };
+
+#define BOX_SYSSPACE_SPACE_NAME "sys_space"
+#define BOX_SYSSPACE_INDEX_NAME "sys_index"
 
 #endif /* INCLUDES_TARANTOOL_BOX_H */

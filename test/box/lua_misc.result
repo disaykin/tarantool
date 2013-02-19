@@ -106,6 +106,7 @@ box.error.ER_PROC_RET: 12290
 box.error.ER_TUPLE_IS_TOO_LONG: 11010
 box.error.ER_EXACT_MATCH: 11522
 box.error.ER_SECONDARY: 770
+box.error.ER_SPACE_META: 14850
 box.error.ER_OK: 0
 box.error.ER_SPACE_DISABLED: 13314
 box.error.ER_TUPLE_NOT_FOUND: 12546
